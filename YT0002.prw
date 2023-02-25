@@ -128,50 +128,62 @@ User Function YT0002(cParam)
         cCnae       := ''
     EndIF    
 
-    IF valtype(xRet) == 'A'
+    aadd(xRet,cNome         )
+    aadd(xRet,cNomeRe       )
+    aadd(xRet,ctod(cDtAber) )
+    aadd(xRet,cEstado       )
+    aadd(xRet,cCodMun       )
+    aadd(xRet,cCidade       )
+    aadd(xRet,cBairro       )
+    aadd(xRet,cEnd          )
+    aadd(xRet,cCompl        )
+    aadd(xRet,cCep          )
+    aadd(xRet,cTel          )
+    aadd(xRet,cEmail        )
+    aadd(xRet,cSitua        )
+    aadd(xRet,ctod(cDtSitu) )
+    aadd(xRet,cCnae         )
 
-        aadd(xRet,cNome         )
-        aadd(xRet,cNomeRe       )
-        aadd(xRet,ctod(cDtAber) )
-        aadd(xRet,cEstado       )
-        aadd(xRet,cCodMun       )
-        aadd(xRet,cCidade       )
-        aadd(xRet,cBairro       )
-        aadd(xRet,cEnd          )
-        aadd(xRet,cCompl        )
-        aadd(xRet,cCep          )
-        aadd(xRet,cTel          )
-        aadd(xRet,cEmail        )
-        aadd(xRet,cSitua        )
-        aadd(xRet,ctod(cDtSitu) )
-        aadd(xRet,cCnae         )
+    IF type('__aRecWS') <> 'A'
+        Public __aRecWS     := aclone(xRet)
+    Else    
+        __aRecWS            := aclone(xRet)
+    EndIF   
 
-        IF type('__aRecWS') <> 'A'
-            Public __aRecWS     := aclone(xRet)
-        Else    
-            __aRecWS            := aclone(xRet)
-        EndIF   
+    IF "A1_CGC" $ cReadVar
 
-    Else
+        M->A1_NOME          := substr(cNome     ,1,tamSX3('A1_NOME'   )[1])
+        M->A1_NREDUZ        := substr(cNomeRe   ,1,tamSX3('A1_NREDUZ' )[1])
+        M->A1_END           := substr(cEnd      ,1,tamSX3('A1_END'    )[1])
+        M->A1_BAIRRO        := substr(cBairro   ,1,tamSX3('A1_BAIRRO' )[1])
+        M->A1_COD_MUN       := substr(cCodMun   ,1,tamSX3('A1_COD_MUN')[1])
+        M->A1_MUN           := substr(cCidade   ,1,tamSX3('A1_MUN'    )[1])
+        M->A1_EST           := substr(cEstado   ,1,tamSX3('A1_EST'    )[1])
+        M->A1_COMPLEM       := substr(cCompl    ,1,tamSX3('A1_COMPLEM')[1])
+        M->A1_CEP           := substr(cCep      ,1,tamSX3('A1_CEP'    )[1])
+        M->A1_TEL           := substr(cTel      ,1,tamSX3('A1_TEL'    )[1])
+        M->A1_EMAIL         := substr(cEmail    ,1,tamSX3('A1_EMAIL'  )[1])
+        M->A1_CNAE          := substr(cCnae     ,1,tamSX3('A1_CNAE'   )[1])
 
-        IF "A1_CGC" $ cReadVar
+        return .T.
 
-            M->A1_NOME          := substr(cNome     ,1,tamSX3('A1_NOME'  )[1])
-            M->A1_NREDUZ        := substr(cNomeRe   ,1,tamSX3('A1_NREDUZ')[1])
-            M->A1_END           := substr(cEnd      ,1,tamSX3('A1_END'   )[1])
+    ElseIF "A2_CGC" $ cReadVar
 
-            return .T.
+        M->A2_NOME          := substr(cNome     ,1,tamSX3('A2_NOME'   )[1])
+        M->A2_NREDUZ        := substr(cNomeRe   ,1,tamSX3('A2_NREDUZ' )[1])
+        M->A2_END           := substr(cEnd      ,1,tamSX3('A2_END'    )[1])
+        M->A2_BAIRRO        := substr(cBairro   ,1,tamSX3('A2_BAIRRO' )[1])
+        M->A2_COD_MUN       := substr(cCodMun   ,1,tamSX3('A2_COD_MUN')[1])
+        M->A2_MUN           := substr(cCidade   ,1,tamSX3('A2_MUN'    )[1])
+        M->A2_EST           := substr(cEstado   ,1,tamSX3('A2_EST'    )[1])
+        M->A2_COMPLEM       := substr(cCompl    ,1,tamSX3('A2_COMPLEM')[1])
+        M->A2_CEP           := substr(cCep      ,1,tamSX3('A2_CEP'    )[1])
+        M->A2_TEL           := substr(cTel      ,1,tamSX3('A2_TEL'    )[1])
+        M->A2_EMAIL         := substr(cEmail    ,1,tamSX3('A2_EMAIL'  )[1])
+        M->A2_CNAE          := substr(cCnae     ,1,tamSX3('A2_CNAE'   )[1])            
 
-        ElseIF "A2_CGC" $ cReadVar
+        return .T.
 
-            M->A2_NOME          := substr(cNome     ,1,tamSX3('A2_NOME'  )[1])
-            M->A2_NREDUZ        := substr(cNomeRe   ,1,tamSX3('A2_NREDUZ')[1])
-            M->A2_END           := substr(cEnd      ,1,tamSX3('A2_END'   )[1])
+    EndIF
 
-            return .T.
-
-        EndIF
-
-    EndIF     
-    
 Return xRet
