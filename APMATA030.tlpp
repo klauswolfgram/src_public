@@ -1,0 +1,86 @@
+#include 'totvs.ch'
+
+/*/{Protheus.doc} U_APMATA030
+    funcao exemplo para execauto de alteracao de clientes. 
+    @type  Function
+    @author user
+    @since 16/02/2024
+    @version version
+    /*/
+Function U_APMATA030 as logical
+
+    Local cCNPJ         := '53113791000122'         //-- Exemplo de CNPJ para busca
+    Local aDados        := array(0)   as array
+    Local aCamposSA1    := array(0)   as array //-- Retorna a lista de campos de contexto real do cadastro de clientes
+    Local x             := 0          as numeric  
+    Local lRPC          := .F.        as logical
+
+    IF type('cEmpAnt') <> 'C'
+        rpcSetEnv('99','01')
+        lRPC := .T.
+    EndIF   
+
+    aCamposSA1          := fwSx3Util():getAllFields('SA1',.F.)  
+
+    Private lMsErroAuto := .F.        as logical
+
+    dbSelectArea('SA1')                     //-- seleciona a area de trabalho para edicao
+    dbSetOrder(3)                           //-- seta o indice padrao para busca. Nesse caso, busca por cnpj
+    dbSeek(xFilial('SA1')+cCNPJ)            //-- faz a busca pelo cliente que precisa ser alterado
+
+    IF .not. found()                        //-- verifica se a busca encontrou o registro
+        
+        IF lRPC
+            rpcClearEnv()
+        EndIF
+
+        fwAlertError('Registro nao encontrado!','[ERRO]')
+
+        //-- encerra o programa caso nao tenha encontrado
+        return .F.
+                              
+    EndIF
+
+    //-- informa a lista de campos que serao alterados
+    aadd(aDados,{'A1_COD'   ,SA1->A1_COD      ,Nil})
+    aadd(aDados,{'A1_LOJA'  ,SA1->A1_LOJA     ,Nil})
+    aadd(aDados,{'A1_NOME'  ,'BRUNO HENRIQUE' ,Nil})
+    aadd(aDados,{'A1_NREDUZ','BH27'           ,Nil})
+
+    //-- Loop para manter os demais campos com os valores que eles ja possuem
+    For x := 1 To Len(aCamposSA1)
+
+        //-- Verifica se o campo ja consta no array aDados e ignora caso positivo
+        IF ascan(aDados,{|campo| alltrim(campo[1]) == aCamposSA1[x]}) > 0
+            Loop
+        EndIF   
+
+        //-- adiciona o campo ao array de campos do execauto mantendo o mesmo conteudo que ja possuia antes.
+        //-- veja o tópico do curso que fala sobre macrosubstituição para entender melhor essa parte.
+        aadd(aDados,{aCamposSA1[x],SA1->&(aCamposSA1[x]),Nil})
+
+    Next
+
+    //-- Executa a rotina automatica para cadastro de clientes
+    msExecAuto({|x,y| mata030(x,y)},aDados,4) //-- Opcao 4 para executar alteracao de dados
+
+    //-- verifica ocorrencia de erros
+    IF lMsErroAuto
+        
+        mostraerro() //-- Exibe mensagem de erros
+        
+        IF lRPC
+            rpcClearEnv()
+        EndIF
+
+        return .F.
+
+    EndIF
+
+    fwAlertInfo('Cadastro alterado com sucesso!!','[ALTERACAO DE CLIENTE]')    
+
+    IF lRPC
+        rpcClearEnv()
+    EndIF    
+
+Return .T. 
