@@ -1,0 +1,238 @@
+#include 'totvs.ch'
+#include 'tlpp-core.th'
+
+class aula_05 from fwAdapterBaseV2
+
+	public method new() constructor
+
+	@get('/treinamento/list/fornecedores')
+	public method lista_fornecedores() as logical
+
+    @post('/treinamento/fornecedores/new')
+    public method incluir_fornecedor() as logical
+
+end class
+
+method new() class aula_05; return self
+
+method incluir_fornecedor() class aula_05
+
+    Local lRPC as logical
+    Local jBodyReq as json
+    Local aDados as array
+    Local nOpc as numeric
+
+    Local bLastError as codeblock
+
+    Private lMsErroAuto as logical
+    Private err as object
+
+    IF type('cEmpAnt') <> 'C'
+        rpcSetEnv('01','0101')
+        lRPC := .T.
+    EndIF  
+
+    //-- @history 10/04/2024, Klaus Wolfgram
+    //-- Determina a nova regra de tratamento de erros, guardando a regra de controle atual na variavel bLastError. 
+    //-- Funciona em conjunto com begin sequence
+    bLastError   := errorblock({|e| err := e, break(err)})
+    err          := errorClass():new()
+    
+    //-- @history 10/04/2024, Klaus Wolfgram
+    //-- Inicia o controle de sequencia. 
+    //-- Sistema de prevencao e controle de erros anterior ao try catch
+    //-- Como o try catch é um sistema mais novo, pode ocorrer ainda alguma inconsistência. 
+    //-- Como alternativa vamos usar o begin sequence
+    begin sequence //try
+
+        jBodyReq := jsonObject():new()
+        jBodyReq:fromJson(oRest:getBodyRequest())
+
+        cNome    := jBodyReq['nome']
+        cNomeRed := jBodyReq['nome_fantasia']
+        cTipoPes := jBodyReq['tipo']
+        cCGC     := jBodyReq['cgc']
+        cEnd     := jBodyReq['endereco']
+        cBairro  := jBodyReq['bairro']
+        cCidade  := jBodyReq['cidade']
+        cEstado  := jBodyReq['estado']
+        cEmail   := jBodyReq['email']
+        cTelefone:= jBodyReq['telefone']
+
+        cCGC     := strtran(strtran(strtran(cCGC,'.',''),'-',''),'/','')
+        cTelefone:= strtran(strtran(strtran(strtran(cTelefone," ",""),"-",""),"(",""),")","")
+
+        CC2->(dbSetOrder(4), dbSeek(xFilial(alias())+cEstado+cCidade))
+        cCodMun := CC2->CC2_CODMUN
+
+        aDados   := {{"A2_COD"     ,getSxeNum("SA2", "A2_COD"),Nil},;
+                    {"A2_LOJA"     ,"01"                      ,Nil},;
+                    {"A2_NOME"     ,cNome                     ,Nil},;
+                    {"A2_NREDUZ"   ,cNomeRed                  ,Nil},;                     
+                    {"A2_CGC"      ,cCGC                      ,Nil},;
+                    {"A2_TIPO"     ,cTipoPes                  ,Nil},;                     
+                    {"A2_INSCR"    ,"ISENTO"                  ,Nil},;                     
+                    {"A2_PAIS"     ,"105"                     ,Nil},;                     
+                    {"A2_END"      ,cEnd                      ,Nil},;
+                    {"A2_BAIRRO"   ,cBairro                   ,Nil},;
+                    {"A2_EST"      ,cEstado                   ,Nil},;
+                    {"A2_MUN"      ,cCidade                   ,Nil},;                     
+                    {"A2_COD_MUN"  ,cCodMun                   ,Nil},;                     
+                    {"A2_EMAIL"    ,cEmail                    ,Nil},;
+                    {"A2_TEL"      ,cTelefone                 ,Nil}}
+        
+        confirmSX8()
+
+        nOpc := 3
+
+        lMsErroAuto := .F.
+        msExecAuto({|x,y| mata020(x,y)}, aDados,nOpc)
+
+        IF lMsErroAuto
+            
+            mostraErro('\data\','erro_sa2.txt')
+            
+            cError          := memoread('\data\erro_sa2.txt')
+
+            err:description := cError
+
+            //-- @history 10/04/2024, Klaus Wolfgram
+            //-- Desvia o fluxo de execucao para a secao recover do controle de sequencia
+            break(err) //throw err
+
+        EndIF
+
+        jResp             := jsonObject():new()
+        jResp['codigo'  ] := SA2->A2_COD
+        jResp['loja'    ] := SA2->A2_LOJA
+        jResp['nome'    ] := SA2->(ALLTRIM(A2_NOME))
+        jResp['status'  ] := 'INCLUIDO COM SUCESSO!!'
+
+        cResp             := jResp:toJson()
+
+        oRest:setResponse(cResp)
+
+    //-- @history 10/04/2024, Klaus Wolfgram
+    //-- Secao do codigo para a qual ocorre o desvio do fluxo de execucao para tratamento de erros de execucao
+	recover //catch err
+
+		cError          := err:description
+        cErrorStack     := err:errorstack
+
+        //-- @history 10/04/2024, Klaus Wolfgram
+        //-- incluir na linha abaixo o breakpoint para analise do conteúdo das variaveis cError e cErrorStack para identificar erros de execucao
+		jResp           := jsonObject():new()
+		jResp['error']  := cError
+
+        cResp           := jResp:toJson()
+
+		oRest:setFault(cResp)        
+
+    //-- @history 10/04/2024, Klaus Wolfgram
+    //-- Encerra o controle de sequencia
+	end sequence //endtry
+
+    //-- @history 10/04/2024, Klaus Wolfgram
+    //-- Restaura o controle de erros anterior
+    errorBlock(bLastError)
+
+	IF lRPC
+		rpcClearEnv()
+	EndIF
+
+return .T.
+
+method lista_fornecedores() class aula_05
+
+    Local lRPC
+    Local nError        as numeric
+    Local cError        as character
+
+    Local jQueryStr     as json
+    Local jResp         as json
+
+    Local cSQL          as character
+    Local cWhere        as character
+    Local cEstado       as character
+    Local cCidade       as character
+    Local nSize         as numeric
+    Local nPage         as numeric
+    Local cOrder        as character
+    Local cSearch       as character
+
+    IF type('cEmpAnt') <> 'C'
+        rpcSetEnv('01','0101')
+        lRPC            := .T.
+    EndIF  
+
+    try
+
+        jQueryStr := oRest:getQueryRequest()
+
+        cEstado := jQueryStr['estado']
+        cCidade := jQueryStr['cidade']
+        nSize := jQueryStr['pageSize']
+        nPage := jQueryStr['page']
+        cOrder := jQueryStr['order']
+        cSearch := jQueryStr['search']
+
+        nSize := if(empty(nSize), 10, nSize)
+        nPage := if(empty(nPage), 1, nPage)
+
+        cSQL := "SELECT #QueryFields# FROM " + retSqlName("SA2") + " SA2"
+        cSQL += CRLF + "WHERE #QueryWhere# "
+
+        cWhere := "D_E_L_E_T_ = ' '"
+
+        IF .not. empty(cEstado)
+            cWhere          += CRLF + "AND A2_EST = '" + cEstado + "' "
+        EndIF
+
+        IF .not. empty(cCidade)
+            cWhere          += CRLF + "AND A2_MUN LIKE '%" + cCidade + "%'"
+        EndIF    
+
+        IF .not. empty(cSearch)
+            cWhere          += CRLF + "AND A2_NOME LIKE '%" + cSearch + "%' "
+        EndIF   
+
+        _Super:new('GET', .T.)
+        ::addMapFields('cod'     ,'A2_COD'   ,.T.,.T., {'A2_COD', 'C',06,00}, 'SA2.A2_COD')
+        ::addMapFields('loja'    ,'A2_LOJA'  ,.T.)
+        ::addMapFields('nome'    ,'A2_NOME'  ,.T.)
+        ::addMapFields('fantasia','A2_NREDUZ',.T.)
+        ::addMapFields('endereco','A2_END'   ,.T.) 
+
+        ::setQuery(cSQL)
+        ::setWhere(cWhere)
+        ::setPageSize(nSize)
+        ::setPage(nPage)
+        ::setOrder(cOrder)
+
+        if ::execute()
+            ::fillGetResponse()
+            oRest:setResponse(::getJsonResponse())
+        Else
+            nError := ::getCode()
+            cError := ::getMessage()
+
+            jResp := jsonObject():new()
+            jResp['error'] := cError
+
+            oRest:setFault(jResp:toJson())
+        EndIF
+
+    catch err
+        cError          := err:errorstack
+
+        jResp           := jsonObject():new()
+        jResp['error']  := cError
+
+        oRest:setFault(jResp:toJson())
+    endtry
+	
+	IF lRPC
+		rpcClearEnv()
+	EndIF
+
+return .T.
