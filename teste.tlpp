@@ -1,0 +1,112 @@
+#include 'tlpp-core.th'
+#include 'totvs.ch'
+
+//-- recentente a TOTVS definiu uma lista de boas práticas. Uma delas é iniciar o namespace com custom pra indicar que é customização
+namespace custom.tabpreco.api.tab
+
+@get('/tabpreco/api/tab/:tab/:filial')
+Function U_TESTE32API(cTabela as character, cFil as character) as logical
+
+    Local jPath         as json
+    Local jRes          as json
+    Local cAliasSQL     as character
+    Local nPrecoPartida as numeric
+    Local nVlrIPI       as numeric
+
+    Local bLastError    as codeblock
+    Local cMsgErr       as character
+
+    //-- variável que receberá o detalhamento do erro. Com begin sequence ela pode ser escopo private, com try catch ela teria de ser escopo public
+    Private err         as object   
+
+    bLastError          := errorBlock({|e| err := e, break(err)}) //-- determina o tratamento de erro
+
+    err                 := errorClass():new()                     
+    
+    //-- @history 02/12/2024, Klaus Wolfgram, Não declare variáveis com os mesmos nomes de parâmetros da função
+    //-- private cTabela       as character
+    //-- private cFil          as character
+
+    //-- inicia o controle de sequeência para prevenção e tratamento de erros com begin sequence, mas poderia ser try catch
+    BEGIN SEQUENCE 
+
+        //-- aqui entra o fluxo principal do programa
+        jPath               := oRest:getPathParamsRequest()
+        cTabela             := jPath['tab']
+        cFil                := jPath['filial']
+
+        cAliasSQL           := getNextAlias()
+
+        BeginSQL alias cAliasSQL
+            SELECT *, D_E_L_E_T_ DEL FROM DA1010 DA1
+            WHERE DA1_CODTAB = %exp:cTabela%
+            AND DA1_FILIAL = %exp:cFil%
+            AND DA1_ATIVO = '2'
+        EndSQL
+
+        jRes                := jsonObject():new()
+        jRes['status'   ]   := .T. //-- define um atributo de controle pra saber que a chamada da requisição foi bem sucedida
+        jRes['CodigoProd'  ] := ''
+        jRes['Pmax'   ] := 0
+        jRes['desconto'   ] := 0
+        jRes['itens'       ] := array(0)
+
+        While !(cAliasSQL)->(eof())
+            SB1->(dbSetOrder(1), dbSeek(cFil + (cAliasSQL)->DA1_CODPRO))
+
+            // Chamada da função para obter Preco_partida e VlrIPI
+            (nPrecoPartida, nVlrIPI) := U_TESTE32(AllTrim(cTabela),AllTrim(cFil), AllTrim((cAliasSQL)->DA1_CODPRO), (cAliasSQL)->DA1_PRCMAX)
+        
+        
+            jRes := jsonObject():new()
+            jRes['CodigoProd'       ]   := (cAliasSQL)->DA1_CODPRO
+            jRes['PMax'             ]      := (cAliasSQL)->DA1_PRCMAX
+            jRes['desconto'         ]   := (cAliasSQL)->DA1_YPERCD
+
+
+            jProd := jsonObject():new()
+            jProd['nome'         ] := SB1->(alltrim(B1_DESC))
+            jProd['codfam'       ] := SB1->(alltrim(B1_YCODGRC))
+            jProd['familia'      ] := SB1->(alltrim(B1_YDESGRC))
+            jProd['PrecoPartida' ] := nPrecoPartida
+            jProd['VlrIPI'       ] := nVlrIPI
+
+            jItem := jsonObject():new()
+            jItem['id'   ] := val((cAliasSQL)->DA1_ITEM)
+            jItem['ativo'] := empty((cAliasSQL)->DEL)
+            jItem['item' ] := jProd
+
+            aadd(jRes['itens'], jItem)
+
+            (cAliasSQL)->(dbSkip())
+
+        Enddo
+
+        (cAliasSQL)->(dbCloseArea())
+
+        oRest:setResponse(jRes:toJson())
+
+    RECOVER
+        //-- aqui entra o fluxo do tratamento de erro. Se entrar aqui é porque alguma parte do programa não deu certo.
+        //-- a variavel err terá os dados do erro, que foi definido pela funcao errorBlock
+
+        cMsgErr := err:description //-- nesse atributo haverá a descrição do erro
+
+        IF !empty(err:errorstack) //-- esse atributo poderá ou não estar preenchido. Se estiver, terá a pilha da chamada com a linha onde ocorreu o erro
+            cMsgErr += CRLF + CRLF + err:errorstack
+        EndIF
+
+        IF !empty(err:errorenv) //-- esse atributo, caso esteja preenchido, tera a lista de variaveis e seus conteúdos no momento da ocorrência do erro
+            cMsgErr += CRLF + CRLF + err:errorenv
+        EndIF
+
+        jRes              := jsonObject():new()
+        jRes['status'   ] := .F.
+        jRes['message'  ] := cMsgErr    
+
+        oRest:setStatusCode(500) //-- define o codigo de erro 500, pra indicar que houve o erro
+        oRest:setResponse(jRes:toJson()) //-- define a mensagem de retorno   
+
+    END SEQUENCE
+
+    Return .T.
